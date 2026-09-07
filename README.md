@@ -439,7 +439,7 @@ were considered candidate repurposing drugs.
 
 For clinical prioritization, compounds were restricted to FDA-approved, non-withdrawn drugs based on:
 
-- **DrugBank version 5.1.12**  
+- **DrugBank**  
   https://go.drugbank.com/
 
 Mechanisms of action were annotated using the CLUE Drug Repurposing Hub.
@@ -512,39 +512,6 @@ Accordingly, this repository should be interpreted as the collection of **study-
 
 ---
 
-## Suggested execution order
-
-A typical analysis sequence is:
-
-```bash
-# 1. Train Korean GReX models
-Rscript 01_train_GReX.R all <input_dir> <output_dir> <PredictDB-Tutorial_dir>
-
-# 2. Generate predicted expression and evaluate prediction performance
-Rscript 02_predict_GReX.R all
-
-# 3. Run Korean- and GTEx-based individual-level TWAS
-Rscript 03_run_TWAS.R all
-
-# 4. Run GIFT fine-mapping
-Rscript 04_run_GIFT.R all
-
-# 5. Run external S-PrediXcan analyses
-Rscript 05_external_replication.R all
-Rscript 05_external_replication.R collect
-
-# 6. Prepare WebGestalt GSEA ranked files
-Rscript 06_prepare_GSEA.R
-
-# 7. Prepare CLUE signatures
-Rscript 07_DrugRepurposing.R prepare
-
-# After manual CLUE analysis and result download:
-Rscript 07_DrugRepurposing.R summarize
-```
-
----
-
 ## Code availability statement
 
 A manuscript-level code availability statement can be written as:
@@ -559,10 +526,3 @@ If you use this repository, please cite the associated manuscript.
 
 The final manuscript citation can be added here after publication.
 
----
-
-## License
-
-Please specify the repository license before public release (for example, MIT, BSD-3-Clause, or another license compatible with the study and institutional requirements).
-
-Third-party software and external datasets remain subject to their respective licenses and terms of use.
