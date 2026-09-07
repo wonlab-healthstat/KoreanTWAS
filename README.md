@@ -512,14 +512,6 @@ Accordingly, this repository should be interpreted as the collection of **study-
 
 ---
 
-## Code availability statement
-
-A manuscript-level code availability statement can be written as:
-
-> Study-specific scripts for GReX model training and prediction, individual-level TWAS, GIFT conditional fine-mapping, external S-PrediXcan analyses, and the preparation and post-processing of WebGestalt and Connectivity Map analyses are publicly available in this GitHub repository. Third-party software is available from the respective developers, and individual-level data are subject to the access policies of the corresponding cohorts.
-
----
-
 ## Citation
 
 If you use this repository, please cite the associated manuscript.
