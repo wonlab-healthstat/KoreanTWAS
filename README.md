@@ -4,11 +4,11 @@ Code repository for the study:
 
 **Transcriptome-Wide Association Studies of 81 Traits in 79,294 Korean Individuals**
 
-This repository contains the study-specific analysis scripts used to train and apply a Korean whole-blood genetically regulated gene expression (GReX) model, perform transcriptome-wide association studies (TWAS), conduct conditional fine-mapping, evaluate external replication, prepare gene set enrichment analyses, and perform computational drug-repurposing analyses.
+This repository contains the study-specific analysis scripts used to train and apply a Korean whole-blood genetically regulated gene expression (GReX) model, perform transcriptome-wide association studies (TWAS), conduct conditional fine-mapping, evaluate external replication, prepare gene set enrichment analyses, perform computational drug-repurposing analyses, and assess TWAS null calibration and association-level robustness using phenotype permutations.
 
 ## Overview
 
-The analysis workflow consists of seven main steps:
+The analysis workflow consists of eight main steps:
 
 1. **Train a Korean whole-blood GReX model** using the PredictDB-Tutorial framework.
 2. **Apply Korean- and GTEx-based GReX models** and evaluate prediction performance.
@@ -17,6 +17,7 @@ The analysis workflow consists of seven main steps:
 5. **Perform external S-PrediXcan analyses** using BioBank Japan (BBJ) and China Kadoorie Biobank (CKB) GWAS summary statistics.
 6. **Prepare ranked gene lists for gene set enrichment analysis (GSEA)** using WebGestalt.
 7. **Prepare and summarize Connectivity Map (CMap) drug-repurposing analyses** using the CLUE platform.
+8. **Perform phenotype-permutation analyses** to assess TWAS null calibration and the robustness of 348 Bonferroni-significant associations.
 
 The repository contains study-specific analysis code only. Individual-level cohort data and third-party software are not redistributed.
 
@@ -33,6 +34,7 @@ KoreanTWAS/
 ├── 05_external_replication.R
 ├── 06_prepare_GSEA.R
 ├── 07_DrugRepurposing.R
+├── 08_run_permutation.R
 └── README.md
 ```
 
@@ -446,9 +448,106 @@ Mechanisms of action were annotated using the CLUE Drug Repurposing Hub.
 
 ---
 
+### 8. Phenotype-permutation analyses
+
+Script:
+
+```text
+08_run_permutation.R
+```
+
+Phenotype permutations were used for two distinct purposes: **genome-wide null calibration** of the Korean-based TWAS and **association-level robustness assessment** of the 348 Bonferroni-significant Korean TWAS gene-trait associations. The analyses use the same phenotype-specific covariates and regression families as the primary individual-level TWAS.
+
+| Mode | Analysis target | Phenotype permutations | Output purpose |
+|---|---|---:|---|
+| `null` (continuous) | All 1,630 Korean TWAS genes across 29 continuous traits | 1,000 per trait | Null P-value distributions and genomic inflation factors |
+| `null` (binary) | All 1,630 Korean TWAS genes across 52 binary traits | 100 per trait | Null P-value distributions and genomic inflation factors |
+| `selected348` | The original 348 Bonferroni-significant Korean TWAS gene-trait pairs | 100,000 additional per pair | Association-level Monte Carlo permutation P values |
+
+#### Permutation schemes
+
+- **Continuous traits:** Freedman-Lane residual permutations under the covariate-only linear model, with residuals shuffled within sex/smoking strata. The test statistic is the absolute gene-coefficient *t* statistic.
+- **Binary traits:** Phenotype labels are shuffled within strata defined adaptively from sex, smoking, age-quantile and BMI-quantile groupings, as applicable to each trait. The test statistic is the profile-likelihood-ratio chi-square from Firth logistic regression (`logistf`).
+- **Trait-specific covariates:** The same exceptions as in the primary TWAS are applied for BMI, height, hip, waist, smoking status, and sex-specific diseases. Genotype principal components are not added as TWAS covariates.
+
+For `null`, the script evaluates the regression P values obtained under each permuted phenotype, summarizes their distributions, and calculates `lambda_GC`. Trait-specific null P-value matrices are saved for further calibration checks and QQ plots; this mode does **not** estimate extreme-tail empirical P values for observed associations.
+
+For `selected348`, the script uses **the original 348-pair manifest**, rather than reselecting genes from a new TWAS run. It performs 100,000 **additional** phenotype permutations per pair, indexed `1001:101000`, preserving the original script's seed scheme. For each association, the empirical Monte Carlo P value is:
+
+```text
+P_perm = (K + 1) / (B_valid + 1)
+```
+
+Here, `K` is the number of valid permutation test statistics at least as extreme as the observed statistic, and `B_valid` is the number of valid permutations. Runs with a valid-permutation fraction below 0.90 are not assigned an empirical P value. No generalized Pareto distribution (GPD) tail extrapolation is used. The 100,000-permutation results are reported separately; the script does not automatically combine them with an earlier 1,000-permutation analysis.
+
+#### Required inputs
+
+Before running the script, configure the file paths near its beginning:
+
+- `PHENOTYPE_FILE`: KoGES+GENIE analysis-ready phenotype data with abbreviation-based trait columns (such as `BMI`, `HDL`, `SMOKE`, `LIP`), `IID`, `SEX`, and `AGE`.
+- `KOREAN_GREX_FILE`: Korean-based predicted-expression data for the same individuals, with ENSG gene identifiers as columns.
+- `GENE_LIST_FILE`: `TWAS_results/Korean/R2_filtered_GReX_models.tsv` generated by `03_run_TWAS.R`, containing the 1,630 tested genes (`gene` column).
+- `SELECTED_PAIRS_FILE`: original `selected_348_gene_trait_pairs.tsv`, containing **exactly 348 rows**, with columns `trait_id` and `Gene` (and optionally `analysis_group`). This manifest must be supplied separately; the script does not infer or recreate the selected 348 associations.
+- `OUTPUT_DIR`: writable directory for permutation outputs.
+
+Alternatively, `DATA_FILE` may point to a combined analysis-ready phenotype/predicted-expression table. Adjust `GREX_ID_COL` if the sample identifier in the predicted-expression file is not `FID`. Other relevant settings include `SEED`, `N_CORES`, `CHECKPOINT_EVERY`, and the permutation counts.
+
+#### Execution
+
+Run the full null-calibration analysis:
+
+```bash
+Rscript 08_run_permutation.R null
+```
+
+Run the 100,000 additional permutations for the selected 348 associations:
+
+```bash
+Rscript 08_run_permutation.R selected348
+```
+
+Or run both modes:
+
+```bash
+Rscript 08_run_permutation.R all
+```
+
+For a limited trial run, supply a trait abbreviation:
+
+```bash
+Rscript 08_run_permutation.R null HDL
+Rscript 08_run_permutation.R selected348 HDL
+```
+
+The code runs permutations on the fly and uses trait-level checkpoints to resume interrupted analyses. Individual-level permutation phenotypes and the complete sequence of permutation test statistics are not exported.
+
+#### Outputs
+
+```text
+<OUTPUT_DIR>/
+|-- null/
+|   |-- ALL_trait_results.tsv
+|   |-- continuous/<TRAIT>/
+|   |   |-- summary.tsv
+|   |   |-- null_permutation_summary.tsv
+|   |   `-- null_pvalues.rds
+|   `-- binary/<TRAIT>/
+|       |-- summary.tsv
+|       |-- null_permutation_summary.tsv
+|       `-- null_pvalues.rds
+`-- selected348/
+    |-- ALL_trait_results.tsv
+    |-- continuous/<TRAIT>/summary.tsv
+    `-- binary/<TRAIT>/summary.tsv
+```
+
+The `selected348/ALL_trait_results.tsv` table preserves the input manifest columns and reports the observed test statistic, exceedance count (`K`), number of valid and failed permutations, empirical P value, and Bonferroni threshold (`0.05 / 1,630`). Full-scale runs, especially the binary Firth regressions, can be computationally intensive; available memory and compute resources should be checked before execution.
+
+---
+
 ## Software and R packages
 
-The scripts use the following R packages:
+The scripts use the following R packages (including `logistf` and `data.table` for permutation analyses):
 
 ```text
 data.table
@@ -507,6 +606,7 @@ Several steps depend on resources that cannot be redistributed directly in this 
 3. WebGestalt GSEA was performed through the WebGestalt web interface.
 4. Connectivity Map analysis was performed through the CLUE web platform.
 5. DrugBank-derived annotations are subject to DrugBank's applicable access and licensing terms.
+6. The permutation analyses require the original 348-pair manifest, the 1,630-gene model list, and authorized access to individual-level phenotype and predicted-expression data; the 100,000-permutation results are not automatically pooled with previous runs.
 
 Accordingly, this repository should be interpreted as the collection of **study-specific analysis scripts and analysis settings** rather than a redistribution of all underlying datasets and third-party software.
 
@@ -517,4 +617,3 @@ Accordingly, this repository should be interpreted as the collection of **study-
 If you use this repository, please cite the associated manuscript.
 
 The final manuscript citation can be added here after publication.
-
